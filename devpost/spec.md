@@ -50,6 +50,7 @@ PRD ref: `prd.md > The Core Journey`.
   - *Rationale:* Normalizing file paths to forward slashes (`/`) before glob matching guarantees identical behavior on Windows and Unix.
 
 ## Where It Runs and How Someone Tries It
+- **Public GitHub Repository:** [https://github.com/ktkartik1234-lgtm/commitgate](https://github.com/ktkartik1234-lgtm/commitgate)
 - **Runtime Environment:** Runs 100% locally on Windows, macOS, or Linux with Node.js (`v24+`) and Git installed. No API keys, cloud accounts, or external network access required.
 - **Exact Commands to Run and Record the 1-Minute Demo:**
   1. Install and initialize hooks + demo repo files:
@@ -62,7 +63,7 @@ PRD ref: `prd.md > The Core Journey`.
      ```bash
      node ./commitgate/cli.js serve
      ```
-  3. Run the 1-minute demo sequence in the main terminal while recording the terminal and `http://localhost:4321` side by side:
+  3. Run the 1-minute demo sequence in the main terminal while recording the terminal and `http://localhost:4321` side by side (or run `node --no-warnings ./commitgate/cli.js demo` for an automated walkthrough):
      ```bash
      # 1. Start session (HUD turns PENDING amber)
      node ./commitgate/cli.js start --task "Fix login validation" --require "src/auth/**" --test "npm test" --token "CG-001"
