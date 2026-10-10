@@ -9,7 +9,7 @@ Build mode: fast
 
 ## Slices
 
-- [ ] **1. Start a focus session and verify commits end-to-end via the Git `post-commit` hook**
+- [x] **1. Start a focus session and verify commits end-to-end via the Git `post-commit` hook**
   Becomes usable: You can initialize CommitGate (`commitgate init`), start a session (`commitgate start --task "Fix login validation" --require "src/auth/**" --test "npm test" --token "CG-001"`), make a fake commit (`notes.txt`) that the `post-commit` hook automatically catches and marks `REJECTED` in SQLite, and make a real commit (`src/auth/validate.ts`) that passes all 4 deterministic rules and flips the session to `VERIFIED` in SQLite.
   Why now: Puts `scope.md > The Unique Kernel` (automatic `post-commit` hook + SQLite persistence + 4-rule deterministic verifier) first, proving the highest-risk cross-platform Git hook and test runner integration immediately.
   PRD ref: `prd.md > The Core Journey` (steps 2–5), `prd.md > Features and Behavior > 1. Session Lifecycle & Guardrails`, `prd.md > Features and Behavior > 2. Automatic Git post-commit Hook & Deterministic Rule Engine`
@@ -19,7 +19,7 @@ Build mode: fast
   Learner check: Run `commitgate status` and inspect the terminal output for the rejected and verified commits to confirm the 4-rule breakdown matches your expected format.
   Commit: `Implement CLI session start, post-commit hook, and 4-rule SQLite verifier`
 
-- [ ] **2. Protect active sessions and ignore untracked idle commits**
+- [x] **2. Protect active sessions and ignore untracked idle commits**
   Becomes usable: Committing when no session is active prints `CommitGate: no active session. Commit ignored.` without blocking Git (recording `UNTRACKED` in SQLite), and running `commitgate start` while a session is already `PENDING` refuses to overwrite it unless `--replace` or `commitgate cancel <token>` is used, plus `commitgate demo-reset` resets the demo target files cleanly for recording.
   Why now: Completes the CLI state-protection guardrails and non-intrusive Git hook boundaries before layering the live HUD over the state machine.
   PRD ref: `prd.md > Features and Behavior > 1. Session Lifecycle & Guardrails`, `prd.md > States and Boundaries`
