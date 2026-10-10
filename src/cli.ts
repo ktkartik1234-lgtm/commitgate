@@ -15,8 +15,15 @@ import { formatVerificationReport } from "./verifier";
 import { runPostCommitHook } from "./hook";
 import { startHudServer } from "./server";
 
-function parseFlags(args: string[]): Record<string, string | boolean> {
+import http from "node:http";
+import { spawn } from "node:child_process";
+
+function parseFlags(args: string[]): {
+  flags: Record<string, string | boolean>;
+  positionals: string[];
+} {
   const flags: Record<string, string | boolean> = {};
+  const positionals: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg.startsWith("--")) {
@@ -28,13 +35,14 @@ function parseFlags(args: string[]): Record<string, string | boolean> {
       } else {
         flags[key] = true;
       }
+    } else {
+      positionals.push(arg);
     }
   }
-  return flags;
+  return { flags, positionals };
 }
 
-function cmdInit(repoRoot: string): void {
-  getDb(repoRoot);
+function writeHookShim(repoRoot: string): string {
   const hooksDir = path.join(repoRoot, ".git", "hooks");
   fs.mkdirSync(hooksDir, { recursive: true });
   const hookPath = path.join(hooksDir, "post-commit");
@@ -44,13 +52,69 @@ function cmdInit(repoRoot: string): void {
     : `"${path.resolve(__dirname, "hook.js").replace(/\\/g, "/")}"`;
   const hookContent = `#!/bin/sh\nnode --no-warnings ${resolvedHookRef}\n`;
   fs.writeFileSync(hookPath, hookContent, { encoding: "utf8", mode: 0o755 });
+  return resolvedHookRef;
+}
+
+function ensureHookInstalled(repoRoot: string): void {
+  const hookPath = path.join(repoRoot, ".git", "hooks", "post-commit");
+  if (!fs.existsSync(hookPath)) {
+    writeHookShim(repoRoot);
+  }
+}
+
+function isHudServerListening(port: number = 4321): Promise<boolean> {
+  return new Promise((resolve) => {
+    const req = http.get(
+      `http://localhost:${port}/api/state`,
+      { timeout: 250 },
+      (res) => {
+        res.resume();
+        resolve(res.statusCode === 200);
+      }
+    );
+    req.on("error", () => resolve(false));
+    req.on("timeout", () => {
+      req.destroy();
+      resolve(false);
+    });
+  });
+}
+
+async function ensureHudServerRunning(
+  repoRoot: string,
+  port: number = 4321
+): Promise<boolean> {
+  const running = await isHudServerListening(port);
+  if (running) return false;
+
+  const cliEntry = path.resolve(__dirname, "cli.js");
+  const child = spawn(
+    process.execPath,
+    ["--no-warnings", cliEntry, "serve", "--port", String(port)],
+    {
+      cwd: repoRoot,
+      detached: true,
+      stdio: "ignore",
+    }
+  );
+  child.unref();
+  await new Promise((r) => setTimeout(r, 250));
+  return true;
+}
+
+function cmdInit(repoRoot: string): void {
+  getDb(repoRoot);
+  const resolvedHookRef = writeHookShim(repoRoot);
   console.log("CommitGate initialized");
   console.log("  database: commitgate.db (WAL mode)");
   console.log(`  hook:     .git/hooks/post-commit -> node ${resolvedHookRef}`);
 }
 
-function cmdStart(args: string[], repoRoot: string): void {
-  const flags = parseFlags(args);
+async function cmdStart(args: string[], repoRoot: string): Promise<void> {
+  ensureHookInstalled(repoRoot);
+  const hudAutoStarted = await ensureHudServerRunning(repoRoot, 4321);
+
+  const { flags, positionals } = parseFlags(args);
   const active = getActiveSession(repoRoot);
   const replace = Boolean(flags.replace);
 
@@ -76,11 +140,21 @@ function cmdStart(args: string[], repoRoot: string): void {
   }
 
   const task =
-    typeof flags.task === "string" ? flags.task : "Fix login validation";
+    typeof flags.task === "string"
+      ? flags.task
+      : positionals[0] ?? "Fix login validation";
   const requireGlob =
-    typeof flags.require === "string" ? flags.require : "src/auth/**";
-  const testCmd = typeof flags.test === "string" ? flags.test : "npm test";
-  const token = typeof flags.token === "string" ? flags.token : "CG-001";
+    typeof flags.require === "string"
+      ? flags.require
+      : positionals[1] ?? "src/auth/**";
+  const testCmd =
+    typeof flags.test === "string"
+      ? flags.test
+      : positionals[2] ?? "npm test";
+  const token =
+    typeof flags.token === "string"
+      ? flags.token
+      : positionals[3] ?? "CG-001";
 
   const created = createSession(
     {
@@ -96,6 +170,9 @@ function cmdStart(args: string[], repoRoot: string): void {
   console.log(`session: ${created.session_id}`);
   console.log(`task:    ${created.task}`);
   console.log(`status:  ${created.status}`);
+  console.log(
+    `hud:     http://localhost:4321${hudAutoStarted ? " (auto-started)" : ""}`
+  );
   console.log("rules:");
   console.log(`  - commit message must contain ${created.session_id}`);
   console.log(`  - must modify ${created.require_glob}`);
@@ -224,12 +301,15 @@ function sleep(ms: number): Promise<void> {
 async function cmdDemo(repoRoot: string): Promise<void> {
   const { execSync } = await import("node:child_process");
 
+  ensureHookInstalled(repoRoot);
+  await ensureHudServerRunning(repoRoot, 4321);
+
   console.log("=== [0:00] Step 1: Resetting to Standby (IDLE) ===");
   cmdDemoReset(repoRoot);
   await sleep(2500);
 
   console.log("\n=== [0:10] Step 2: Starting Focus Session CG-001 (PENDING) ===");
-  cmdStart(
+  await cmdStart(
     [
       "--task",
       "Fix login validation",
@@ -290,7 +370,7 @@ async function main(): Promise<void> {
       cmdInit(repoRoot);
       break;
     case "start":
-      cmdStart(rest, repoRoot);
+      await cmdStart(rest, repoRoot);
       break;
     case "cancel":
       cmdCancel(rest, repoRoot);
@@ -305,7 +385,7 @@ async function main(): Promise<void> {
       await cmdDemo(repoRoot);
       break;
     case "serve": {
-      const flags = parseFlags(rest);
+      const { flags } = parseFlags(rest);
       const port =
         typeof flags.port === "string" ? parseInt(flags.port, 10) : 4321;
       startHudServer(Number.isNaN(port) ? 4321 : port, repoRoot);
@@ -316,7 +396,10 @@ async function main(): Promise<void> {
       break;
     default:
       console.log(
-        "Usage: commitgate <init|start|status|cancel|demo-reset|demo|serve> [options]"
+        "Usage: commitgate <start|status|cancel|demo|demo-reset|init|serve> [options]"
+      );
+      console.log(
+        'Quick start: commitgate start "Fix login validation" "src/auth/**"'
       );
       break;
   }
