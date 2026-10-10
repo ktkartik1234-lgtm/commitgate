@@ -13,6 +13,7 @@ import {
 } from "./db";
 import { formatVerificationReport } from "./verifier";
 import { runPostCommitHook } from "./hook";
+import { startHudServer } from "./server";
 
 function parseFlags(args: string[]): Record<string, string | boolean> {
   const flags: Record<string, string | boolean> = {};
@@ -203,6 +204,13 @@ async function main(): Promise<void> {
     case "demo-reset":
       cmdDemoReset(repoRoot);
       break;
+    case "serve": {
+      const flags = parseFlags(rest);
+      const port =
+        typeof flags.port === "string" ? parseInt(flags.port, 10) : 4321;
+      startHudServer(Number.isNaN(port) ? 4321 : port, repoRoot);
+      break;
+    }
     case "verify-commit":
       runPostCommitHook(repoRoot);
       break;

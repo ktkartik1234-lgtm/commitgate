@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CommitGate HUD</title>
+  <style>
+    :root {
+      --bg: #0A0C10;
+      --card: #11151D;
+      --border: #232A36;
+      --text: #D7DCE5;
+      --muted: #7C8698;
+      --pending: #E5A54B;
+      --rejected: #E5484D;
+      --verified: #3FB950;
+      --mono: "JetBrains Mono", "SF Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 12.5px;
+      line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 24px 16px;
+    }
+
+    .hud-card {
+      width: 100%;
+      max-width: 368px;
+      background-color: var(--card);
+      border: 1px solid var(--border);
+      border-left-width: 3px;
+      border-left-color: var(--border);
+    }
+
+    .hud-card.state-PENDING {
+      border-left-color: var(--pending);
+      box-shadow: 0 0 0 1px rgba(229, 165, 75, 0.12);
+    }
+
+    .hud-card.state-REJECTED {
+      border-left-color: var(--rejected);
+    }
+
+    .hud-card.state-VERIFIED {
+      border-left-color: var(--verified);
+    }
+
+    .hud-section {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .hud-section:last-child {
+      border-bottom: none;
+    }
+
+    .hud-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand {
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+
+    .badge {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .badge.badge-PENDING {
+      color: var(--pending);
+      border-color: var(--pending);
+    }
+
+    .badge.badge-REJECTED {
+      color: var(--rejected);
+      border-color: var(--rejected);
+    }
+
+    .badge.badge-VERIFIED {
+      color: var(--verified);
+      border-color: var(--verified);
+    }
+
+    .task-title {
+      margin-top: 6px;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+      word-break: break-word;
+    }
+
+    .status-line {
+      margin-top: 4px;
+      font-size: 11.5px;
+    }
+
+    .status-line.text-PENDING {
+      color: var(--pending);
+    }
+
+    .status-line.text-REJECTED {
+      color: var(--rejected);
+    }
+
+    .status-line.text-VERIFIED {
+      color: var(--verified);
+    }
+
+    .meta-grid {
+      display: grid;
+      gap: 3px;
+      color: var(--muted);
+      font-size: 11.5px;
+    }
+
+    .meta-grid span.val {
+      color: var(--text);
+    }
+
+    .rules-list {
+      display: grid;
+      gap: 8px;
+      font-size: 12px;
+    }
+
+    .rule-item {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .rule-head {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    .rule-tag {
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .tag-PASS {
+      color: var(--verified);
+    }
+
+    .tag-FAIL {
+      color: var(--rejected);
+    }
+
+    .tag-WAIT {
+      color: var(--muted);
+    }
+
+    .rule-label {
+      color: var(--text);
+    }
+
+    .rule-expanded {
+      margin-top: 4px;
+      margin-left: 14px;
+      padding: 6px 8px;
+      background-color: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 11px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .summary-box {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 11.5px;
+      display: grid;
+      gap: 2px;
+    }
+
+    .summary-box .ok {
+      color: var(--verified);
+    }
+
+    .footer-text {
+      font-size: 11.5px;
+      color: var(--muted);
+    }
+
+    .footer-text.footer-PENDING {
+      color: var(--pending);
+    }
+
+    .footer-text.footer-REJECTED {
+      color: var(--rejected);
+    }
+
+    .footer-text.footer-VERIFIED {
+      color: var(--verified);
+    }
+
+    .conn-bar {
+      width: 100%;
+      max-width: 368px;
+      margin-top: 8px;
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--sans);
+      font-size: 10.5px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div id="hud-root" class="hud-card state-IDLE">
+    <div class="hud-section">
+      <div class="hud-header">
+        <span class="brand">CommitGate</span>
+        <span class="badge">STANDBY</span>
+      </div>
+      <div class="footer-text" style="margin-top: 8px;">
+        No active session. Awaiting focus block.
+      </div>
+    </div>
+  </div>
+
+  <div class="conn-bar">
+    <span>Trusted Proxy HUD &bull; SQLite WAL</span>
+    <span id="sse-indicator">SSE: connecting...</span>
+  </div>
+
+  <script>
+    function escapeHtml(str) {
+      return String(str ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function renderSnapshot(data) {
+      const root = document.getElementById("hud-root");
+      if (!data || !data.session || data.hudState === "IDLE") {
+        root.className = "hud-card state-IDLE";
+        root.innerHTML = `
+          <div class="hud-section">
+            <div class="hud-header">
+              <span class="brand">CommitGate</span>
+              <span class="badge">STANDBY</span>
+            </div>
+            <div class="footer-text" style="margin-top: 8px;">
+              No active session. Awaiting focus block.
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      const s = data.session;
+      const attempt = data.latestAttempt;
+      const hudState = data.hudState; // PENDING | REJECTED | VERIFIED
+      root.className = `hud-card state-${hudState}`;
+
+      // 1. PENDING state (before any commit attempt)
+      if (hudState === "PENDING" || !attempt) {
+        root.innerHTML = `
+          <div class="hud-section">
+            <div class="hud-header">
+              <span class="brand">CommitGate</span>
+              <span class="badge badge-PENDING">${escapeHtml(s.session_id)} | PENDING</span>
+            </div>
+            <div class="task-title">${escapeHtml(s.task)}</div>
+          </div>
+          <div class="hud-section meta-grid">
+            <div>commit: <span class="val">&mdash;</span></div>
+            <div>attempt: <span class="val">0</span></div>
+            <div>last check: <span class="val">awaiting commit</span></div>
+          </div>
+          <div class="hud-section rules-list">
+            <div class="rule-item">
+              <div class="rule-head">
+                <span class="rule-tag tag-WAIT">[WAIT]</span>
+                <span class="rule-label">token in commit message (${escapeHtml(s.session_id)})</span>
+              </div>
+            </div>
+            <div class="rule-item">
+              <div class="rule-head">
+                <span class="rule-tag tag-WAIT">[WAIT]</span>
+                <span class="rule-label">required path modified (${escapeHtml(s.require_glob)})</span>
+              </div>
+            </div>
+            <div class="rule-item">
+              <div class="rule-head">
+                <span class="rule-tag tag-WAIT">[WAIT]</span>
+                <span class="rule-label">meaningful code change</span>
+              </div>
+            </div>
+            <div class="rule-item">
+              <div class="rule-head">
+                <span class="rule-tag tag-WAIT">[WAIT]</span>
+                <span class="rule-label">tests passed (${escapeHtml(s.test_cmd)})</span>
+              </div>
+            </div>
+          </div>
+          <div class="hud-section">
+            <div class="footer-text footer-PENDING">Listening for Git commit... Status: PENDING.</div>
+          </div>
+        `;
+        return;
+      }
+
+      const r = attempt.rules;
+
+      // 2. REJECTED state
+      if (hudState === "REJECTED") {
+        const tokenTag = r.tokenMatch.passed ? "PASS" : "FAIL";
+        const pathTag = r.requiredPath.passed ? "PASS" : "FAIL";
+        const diffTag = r.meaningfulChange.passed ? "PASS" : "FAIL";
+        const testTag = r.testsPassed.passed ? "PASS" : "FAIL";
+
+        const pathExpanded = !r.requiredPath.passed
+          ? `<div class="rule-expanded">Expected: ${escapeHtml(r.requiredPath.expected)}\nChanged:  ${escapeHtml(
+              r.requiredPath.changedFiles && r.requiredPath.changedFiles.length
+                ? r.requiredPath.changedFiles.join(", ")
+                : "(none)"
+            )}</div>`
+          : "";
+
+        const diffExpanded = !r.meaningfulChange.passed
+          ? `<div class="rule-expanded">${escapeHtml(r.meaningfulChange.reason || "no non-whitespace changes in required path")}</div>`
+          : "";
+
+        const testExpanded = !r.testsPassed.passed
+          ? `<div class="rule-expanded">${escapeHtml(
+              (r.testsPassed.outputSnippet || []).slice(-5).join("\n") ||
+                `Command exited with code ${r.testsPassed.exitCode}`
+            )}</div>`
+          : "";
+
+        root.innerHTML = `
+          <div class="hud-section">
+            <div class="hud-header">
+              <span class="brand">CommitGate</span>
+              <span class="badge badge-REJECTED">${escapeHtml(s.session_id)} | REJECTED</span>
+            </div>
+            <div class="task-title">${escapeHtml(s.task)}</div>
+            <div class="status-line text-REJECTED">REJECTED &mdash; proof not accepted.</div>
+          </div>
+          <div class="hud-section meta-grid">
+            <div>commit: <span class="val">${escapeHtml(attempt.commit_sha)}</span></div>
+            <div>attempt: <span class="val">attempt ${escapeHtml(attempt.attempt_number)}</span></div>
+            <div>last check: <span class="val">${escapeHtml(attempt.created_at)}</span></div>
+          </div>
+          <div class="hud-section rules-list">
+            <div class="rule-item">
+              <div class="rule-head">
+                <span class="rule-tag tag-${tokenTag}">[${tokenTag}]</span>
+                <span class="rule-label">token in commit message</span>
+              </div>
+            </div>
+            <div class="rule-item">
+              <div class="rule-head">
+                <span class="rule-tag tag-${pathTag}">[${pathTag}]</span>
+                <span class="rule-label">required path modified</span>
+              </div>
+              ${pathExpanded}
+            </div>
+            <div class="rule-item">
+              <div class="rule-head">
+                <span class="rule-tag tag-${diffTag}">[${diffTag}]</span>
+                <span class="rule-label">meaningful code change</span>
+              </div>
+              ${diffExpanded}
+            </div>
+            <div class="rule-item">
+              <div class="rule-head">
+                <span class="rule-tag tag-${testTag}">[${testTag}]</span>
+                <span class="rule-label">tests passed</span>
+              </div>
+              ${testExpanded}
+            </div>
+          </div>
+          <div class="hud-section">
+            <div class="footer-text footer-REJECTED">Fix the failed rules and commit again.</div>
+          </div>
+        `;
+        return;
+      }
+
+      // 3. VERIFIED state
+      const matchedFile =
+        r && r.requiredPath && r.requiredPath.matchedFiles && r.requiredPath.matchedFiles.length
+          ? r.requiredPath.matchedFiles.join(", ")
+          : s.require_glob;
+      const diffStat = r && r.requiredPath ? r.requiredPath.diffSummary : "+0 / -0";
+
+      root.innerHTML = `
+        <div class="hud-section">
+          <div class="hud-header">
+            <span class="brand">CommitGate</span>
+            <span class="badge badge-VERIFIED">${escapeHtml(s.session_id)} | VERIFIED</span>
+          </div>
+          <div class="task-title">${escapeHtml(s.task)}</div>
+          <div class="status-line text-VERIFIED">VERIFIED &mdash; proof-of-work accepted.</div>
+        </div>
+        <div class="hud-section meta-grid">
+          <div>commit: <span class="val">${escapeHtml(attempt.commit_sha)}</span></div>
+          <div>attempt: <span class="val">attempt ${escapeHtml(attempt.attempt_number)}</span></div>
+          <div>last check: <span class="val">${escapeHtml(attempt.created_at)}</span></div>
+          ${s.verification_id ? `<div>proof: <span class="val">verification_id ${escapeHtml(s.verification_id)}</span></div>` : ""}
+        </div>
+        <div class="hud-section">
+          <div class="rules-list">
+            <div class="rule-item">
+              <div class="rule-head">
+                <span class="rule-tag tag-PASS">[PASS]</span>
+                <span class="rule-label">token in commit message</span>
+              </div>
+            </div>
+            <div class="rule-item">
+              <div class="rule-head">
+                <span class="rule-tag tag-PASS">[PASS]</span>
+                <span class="rule-label">required path modified</span>
+              </div>
+            </div>
+            <div class="rule-item">
+              <div class="rule-head">
+                <span class="rule-tag tag-PASS">[PASS]</span>
+                <span class="rule-label">meaningful code change</span>
+              </div>
+            </div>
+            <div class="rule-item">
+              <div class="rule-head">
+                <span class="rule-tag tag-PASS">[PASS]</span>
+                <span class="rule-label">tests passed</span>
+              </div>
+            </div>
+          </div>
+          <div class="summary-box">
+            <div>${escapeHtml(matchedFile)} <span class="ok">${escapeHtml(diffStat)}</span></div>
+            <div class="ok">${escapeHtml(s.test_cmd)} passed</div>
+          </div>
+        </div>
+        <div class="hud-section">
+          <div class="footer-text footer-VERIFIED">Session closed. Work proved.</div>
+        </div>
+      `;
+    }
+
+    async function loadInitialState() {
+      try {
+        const res = await fetch("/api/state");
+        const data = await res.json();
+        renderSnapshot(data);
+      } catch (err) {
+        console.error("Failed to fetch initial state", err);
+      }
+    }
+
+    function connectSSE() {
+      const indicator = document.getElementById("sse-indicator");
+      const es = new EventSource("/events");
+      es.onopen = () => {
+        indicator.textContent = "SSE: live";
+        indicator.style.color = "#3FB950";
+      };
+      es.onmessage = (ev) => {
+        try {
+          const payload = JSON.parse(ev.data);
+          renderSnapshot(payload);
+        } catch (e) {
+          console.error("Invalid SSE payload", e);
+        }
+      };
+      es.onerror = () => {
+        indicator.textContent = "SSE: reconnecting...";
+        indicator.style.color = "#E5A54B";
+      };
+    }
+
+    loadInitialState();
+    connectSSE();
+  </script>
+</body>
+</html>

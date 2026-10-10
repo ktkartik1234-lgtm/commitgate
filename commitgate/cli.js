@@ -9,6 +9,7 @@ const node_path_1 = __importDefault(require("node:path"));
 const db_1 = require("./db");
 const verifier_1 = require("./verifier");
 const hook_1 = require("./hook");
+const server_1 = require("./server");
 function parseFlags(args) {
     const flags = {};
     for (let i = 0; i < args.length; i++) {
@@ -170,6 +171,12 @@ async function main() {
         case "demo-reset":
             cmdDemoReset(repoRoot);
             break;
+        case "serve": {
+            const flags = parseFlags(rest);
+            const port = typeof flags.port === "string" ? parseInt(flags.port, 10) : 4321;
+            (0, server_1.startHudServer)(Number.isNaN(port) ? 4321 : port, repoRoot);
+            break;
+        }
         case "verify-commit":
             (0, hook_1.runPostCommitHook)(repoRoot);
             break;

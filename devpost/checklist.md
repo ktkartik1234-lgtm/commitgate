@@ -29,7 +29,7 @@ Build mode: fast
   Learner check: Try starting a duplicate session and canceling it in the terminal, and confirm the guard message and `cancel` / `--replace` flow behave as expected.
   Commit: `Add session overwrite guardrails, cancel/replace commands, and idle hook handling`
 
-- [ ] **3. Live 360px Monospace HTML "Trusted Proxy" HUD Widget over SSE**
+- [x] **3. Live 360px Monospace HTML "Trusted Proxy" HUD Widget over SSE**
   Becomes usable: Running `commitgate serve` opens `http://localhost:4321`, displaying the compact 360px monospace HUD card (`#0A0C10` / `#11151D` flight-recorder theme) that automatically transitions in real time via Server-Sent Events (watching SQLite `PRAGMA data_version`) from `STANDBY` → `PENDING` (amber `#E5A54B`) → `REJECTED` (red `#E5484D` with expanded rule failures and 5-line test output) → `VERIFIED` (green `#3FB950` with diff summary).
   Why now: Connects the proven SQLite + Git-hook backend to the visual behavioral focus layer so the side-by-side 1-minute demo works end to end.
   PRD ref: `prd.md > The Core Journey` (steps 1–5), `prd.md > Screens and Layout`, `prd.md > Look and Feel`, `prd.md > Features and Behavior > 3. Local HTML "Trusted Proxy" HUD Widget`
@@ -41,7 +41,7 @@ Build mode: fast
 
 ## Hands-on Checkpoints
 
-- [ ] Early usable behavior explored — after Slice 1 (core CLI + `post-commit` hook + 4-rule SQLite verifier)
+- [x] Early usable behavior explored — after Slice 1 (core CLI + `post-commit` hook + 4-rule SQLite verifier)
 - [ ] Final kick-the-tires exploration and feedback completed — after Slice 3 (full CLI + Git hook + live SSE 360px HUD)
 
 ## Final Review
