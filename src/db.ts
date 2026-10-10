@@ -166,6 +166,9 @@ export function createSession(
 ): SessionRow {
   const db = getDb(repoRoot);
   const now = new Date().toISOString();
+  db.prepare(`DELETE FROM commit_attempts WHERE session_id = ?`).run(
+    params.session_id
+  );
   db.prepare(
     `INSERT OR REPLACE INTO sessions (
       session_id, task, require_glob, test_cmd, status, attempt_count, verification_id, created_at, updated_at

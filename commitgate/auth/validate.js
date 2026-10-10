@@ -10,6 +10,6 @@ function validateLogin(email, password) {
     if (!normalizedEmail.includes("@") || password.length < 8) {
         return false;
     }
-    // Valid credentials pass verification:
-    return true;
+    // Intentional bug for the 0:10-0:25 demo step (returns false instead of true):
+    return false;
 }

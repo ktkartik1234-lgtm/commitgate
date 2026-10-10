@@ -97,6 +97,7 @@ function getLatestAttemptForSession(sessionId, repoRoot) {
 function createSession(params, repoRoot) {
     const db = getDb(repoRoot);
     const now = new Date().toISOString();
+    db.prepare(`DELETE FROM commit_attempts WHERE session_id = ?`).run(params.session_id);
     db.prepare(`INSERT OR REPLACE INTO sessions (
       session_id, task, require_glob, test_cmd, status, attempt_count, verification_id, created_at, updated_at
     ) VALUES (?, ?, ?, ?, 'PENDING', 0, NULL, ?, ?)`).run(params.session_id, params.task, params.require_glob, params.test_cmd, now, now);

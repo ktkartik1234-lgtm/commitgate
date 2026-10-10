@@ -38,11 +38,15 @@ function cmdInit(repoRoot: string): void {
   const hooksDir = path.join(repoRoot, ".git", "hooks");
   fs.mkdirSync(hooksDir, { recursive: true });
   const hookPath = path.join(hooksDir, "post-commit");
-  const hookContent = `#!/bin/sh\nnode --no-warnings ./commitgate/hook.js\n`;
+  const localHookScript = path.join(repoRoot, "commitgate", "hook.js");
+  const resolvedHookRef = fs.existsSync(localHookScript)
+    ? "./commitgate/hook.js"
+    : `"${path.resolve(__dirname, "hook.js").replace(/\\/g, "/")}"`;
+  const hookContent = `#!/bin/sh\nnode --no-warnings ${resolvedHookRef}\n`;
   fs.writeFileSync(hookPath, hookContent, { encoding: "utf8", mode: 0o755 });
   console.log("CommitGate initialized");
   console.log("  database: commitgate.db (WAL mode)");
-  console.log("  hook:     .git/hooks/post-commit -> node ./commitgate/hook.js");
+  console.log(`  hook:     .git/hooks/post-commit -> node ${resolvedHookRef}`);
 }
 
 function cmdStart(args: string[], repoRoot: string): void {
@@ -157,9 +161,36 @@ function cmdStatus(repoRoot: string): void {
 }
 
 function cmdDemoReset(repoRoot: string): void {
+  const { execSync } = require("node:child_process") as typeof import("node:child_process");
+  // Unwind any temporary CG-001 demo commits from HEAD so repeated demo runs work cleanly
+  for (let i = 0; i < 10; i++) {
+    try {
+      const subject = execSync("git log -1 --pretty=%s", {
+        cwd: repoRoot,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim();
+      if (/^CG-001\b/i.test(subject)) {
+        execSync("git reset --soft HEAD~1", {
+          cwd: repoRoot,
+          stdio: "ignore",
+        });
+      } else {
+        break;
+      }
+    } catch {
+      break;
+    }
+  }
   resetDatabase(repoRoot);
-  const validatePath = path.join(repoRoot, "src", "auth", "validate.ts");
-  const initialValidate = `/**
+  try {
+    execSync("git checkout HEAD -- src/auth/validate.ts notes.txt", {
+      cwd: repoRoot,
+      stdio: "ignore",
+    });
+  } catch {
+    const validatePath = path.join(repoRoot, "src", "auth", "validate.ts");
+    const initialValidate = `/**
  * Demo target module for CommitGate proof-of-work verification.
  * Task: Fix login validation so valid credentials return true.
  */
@@ -172,14 +203,16 @@ export function validateLogin(email: string, password: string): boolean {
   return false;
 }
 `;
-  fs.writeFileSync(validatePath, initialValidate, "utf8");
-  fs.writeFileSync(
-    path.join(repoRoot, "notes.txt"),
-    "# Scratch Notes\nInitial project notes.\n",
-    "utf8"
-  );
+    fs.writeFileSync(validatePath, initialValidate, "utf8");
+    fs.writeFileSync(
+      path.join(repoRoot, "notes.txt"),
+      "# Scratch Notes\nInitial project notes.\n",
+      "utf8"
+    );
+  }
   console.log("CommitGate demo reset to Standby (IDLE).");
   console.log("  - commitgate.db cleared");
+  console.log("  - temporary CG-001 demo commits unwound from HEAD");
   console.log("  - src/auth/validate.ts reset to initial failing test state");
   console.log("  - notes.txt reset");
 }
