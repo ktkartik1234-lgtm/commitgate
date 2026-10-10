@@ -1,3 +1,2 @@
 # Scratch Notes
 Initial project notes.
-noise
