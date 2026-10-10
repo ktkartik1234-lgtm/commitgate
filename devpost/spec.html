@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CommitGate — Technical Specification (4-spec)</title>
+  <style>
+    :root {
+      --bg: #0A0C10;
+      --card: #11151D;
+      --border: #232A36;
+      --text: #D7DCE5;
+      --muted: #7C8698;
+      --pending: #E5A54B;
+      --rejected: #E5484D;
+      --verified: #3FB950;
+      --accent: #58A6FF;
+      --mono: "JetBrains Mono", "SF Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.55;
+      padding: 2rem 1.5rem;
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+    header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 1.25rem;
+      margin-bottom: 1.75rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    h1 { font-size: 1.45rem; letter-spacing: -0.02em; margin-bottom: 0.35rem; }
+    .subtitle { color: var(--muted); max-width: 760px; font-family: var(--sans); font-size: 0.92rem; }
+    .doc-badge {
+      padding: 0.25rem 0.65rem;
+      border: 1px solid var(--pending);
+      color: var(--pending);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    h2 {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 0.9rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.4rem;
+    }
+    .section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      padding: 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+    svg.arch {
+      width: 100%;
+      min-width: 820px;
+      height: auto;
+      display: block;
+    }
+    .comp-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .comp-btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 0.75rem;
+      text-align: left;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    .comp-btn.active {
+      border-color: var(--accent);
+      color: var(--text);
+      background: #151B26;
+    }
+    .comp-detail {
+      background: #07080B;
+      border: 1px solid var(--border);
+      padding: 1rem;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.25rem;
+    }
+    @media (max-width: 820px) {
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+      margin-top: 0.5rem;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.45rem 0.6rem;
+      text-align: left;
+    }
+    th { background: var(--bg); color: var(--muted); }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text);
+      background: #07080B;
+      border: 1px solid var(--border);
+      padding: 0.9rem;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>CommitGate — Technical Specification (`4-spec`)</h1>
+      <p class="subtitle">Node.js + TypeScript + SQLite (`commitgate.db`) + Git `post-commit` Hook (`node ./commitgate/hook.js`) + Local SSE HUD Server.</p>
+    </div>
+    <span class="doc-badge" id="doc-status" style="border-color: var(--verified); color: var(--verified);">doc: spec &bull; status: approved</span>
+  </header>
+
+  <div class="section" style="overflow-x: auto;">
+    <h2>1. Cross-Process Data-Flow &amp; Architecture Diagram (Option A: SQLite `PRAGMA data_version` + SSE)</h2>
+    <svg class="arch" viewBox="0 0 940 220" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 1 L 10 5 L 0 9 z" fill="#58A6FF" />
+        </marker>
+      </defs>
+      <!-- Process 1: CLI -->
+      <rect x="15" y="20" width="215" height="75" fill="#0A0C10" stroke="#E5A54B" stroke-width="1.5"/>
+      <text x="122" y="44" fill="#E5A54B" font-family="monospace" font-size="11" text-anchor="middle" font-weight="bold">CLI (commitgate/cli.js)</text>
+      <text x="122" y="62" fill="#D7DCE5" font-family="monospace" font-size="10" text-anchor="middle">init | start | cancel | status</text>
+      <text x="122" y="79" fill="#7C8698" font-family="monospace" font-size="9.5" text-anchor="middle">Short-lived process</text>
+
+      <!-- Process 2: Git Hook -->
+      <rect x="15" y="120" width="215" height="80" fill="#0A0C10" stroke="#3FB950" stroke-width="1.5"/>
+      <text x="122" y="144" fill="#3FB950" font-family="monospace" font-size="11" text-anchor="middle" font-weight="bold">Git Hook (commitgate/hook.js)</text>
+      <text x="122" y="162" fill="#D7DCE5" font-family="monospace" font-size="10" text-anchor="middle">4-Rule Verifier (src/verifier.ts)</text>
+      <text x="122" y="179" fill="#7C8698" font-family="monospace" font-size="9.5" text-anchor="middle">Token + Glob + Diff + npm test</text>
+
+      <!-- SQLite DB -->
+      <rect x="305" y="55" width="210" height="110" fill="#0A0C10" stroke="#58A6FF" stroke-width="2"/>
+      <text x="410" y="84" fill="#58A6FF" font-family="monospace" font-size="12" text-anchor="middle" font-weight="bold">commitgate.db (SQLite WAL)</text>
+      <text x="410" y="105" fill="#D7DCE5" font-family="monospace" font-size="10" text-anchor="middle">Table: sessions</text>
+      <text x="410" y="122" fill="#D7DCE5" font-family="monospace" font-size="10" text-anchor="middle">Table: commit_attempts</text>
+      <text x="410" y="143" fill="#7C8698" font-family="monospace" font-size="9.5" text-anchor="middle">PRAGMA data_version</text>
+
+      <!-- Process 3: SSE Server -->
+      <rect x="580" y="55" width="175" height="110" fill="#0A0C10" stroke="#232A36" stroke-width="1.5"/>
+      <text x="667" y="84" fill="#D7DCE5" font-family="monospace" font-size="11" text-anchor="middle" font-weight="bold">SSE Server (src/server.ts)</text>
+      <text x="667" y="105" fill="#7C8698" font-family="monospace" font-size="10" text-anchor="middle">Checks data_version</text>
+      <text x="667" y="122" fill="#7C8698" font-family="monospace" font-size="10" text-anchor="middle">every 250ms</text>
+      <text x="667" y="143" fill="#58A6FF" font-family="monospace" font-size="9.5" text-anchor="middle">GET /events (SSE)</text>
+
+      <!-- Browser HUD -->
+      <rect x="800" y="55" width="125" height="110" fill="#0A0C10" stroke="#3FB950" stroke-width="1.5"/>
+      <text x="862" y="84" fill="#D7DCE5" font-family="monospace" font-size="11" text-anchor="middle" font-weight="bold">360px HUD</text>
+      <text x="862" y="104" fill="#E5A54B" font-family="monospace" font-size="10" text-anchor="middle">PENDING</text>
+      <text x="862" y="121" fill="#E5484D" font-family="monospace" font-size="10" text-anchor="middle">REJECTED</text>
+      <text x="862" y="138" fill="#3FB950" font-family="monospace" font-size="10" text-anchor="middle">VERIFIED</text>
+
+      <!-- Connectors -->
+      <line x1="230" y1="58" x2="300" y2="90" stroke="#58A6FF" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <line x1="230" y1="160" x2="300" y2="128" stroke="#58A6FF" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <line x1="515" y1="110" x2="575" y2="110" stroke="#58A6FF" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <line x1="755" y1="110" x2="795" y2="110" stroke="#58A6FF" stroke-width="1.5" marker-end="url(#arrow)"/>
+    </svg>
+  </div>
+
+  <div class="section">
+    <h2>2. Interactive Component Explorer (Mapped to PRD Headings &amp; Source Files)</h2>
+    <div class="comp-grid">
+      <button class="comp-btn active" onclick="showComp(0, this)">1. SQLite Store (src/db.ts)</button>
+      <button class="comp-btn" onclick="showComp(1, this)">2. CLI Controller (src/cli.ts)</button>
+      <button class="comp-btn" onclick="showComp(2, this)">3. Hook &amp; Verifier (src/verifier.ts)</button>
+      <button class="comp-btn" onclick="showComp(3, this)">4. SSE HUD Server (src/server.ts)</button>
+      <button class="comp-btn" onclick="showComp(4, this)">5. Demo Target (src/auth/*)</button>
+    </div>
+    <div class="comp-detail" id="comp-detail"></div>
+  </div>
+
+  <div class="section grid-2">
+    <div>
+      <h2>3. SQLite Schema (`commitgate.db`)</h2>
+      <div style="color:var(--accent);margin-bottom:0.25rem;">Table: <code>sessions</code></div>
+      <table>
+        <thead><tr><th>Column</th><th>Type</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td><code>session_id</code></td><td>TEXT PK</td><td>Token e.g. <code>CG-001</code></td></tr>
+          <tr><td><code>task</code></td><td>TEXT</td><td><code>Fix login validation</code></td></tr>
+          <tr><td><code>require_glob</code></td><td>TEXT</td><td><code>src/auth/**</code></td></tr>
+          <tr><td><code>test_cmd</code></td><td>TEXT</td><td><code>npm test</code></td></tr>
+          <tr><td><code>status</code></td><td>TEXT</td><td><code>PENDING | VERIFIED | CANCELED | SUPERSEDED</code></td></tr>
+          <tr><td><code>attempt_count</code></td><td>INTEGER</td><td>Incremented on each commit</td></tr>
+          <tr><td><code>verification_id</code></td><td>TEXT</td><td>Short hash e.g. <code>9f2c1a7</code></td></tr>
+        </tbody>
+      </table>
+      <div style="color:var(--accent);margin:0.85rem 0 0.25rem;">Table: <code>commit_attempts</code></div>
+      <table>
+        <thead><tr><th>Column</th><th>Type</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>INTEGER PK</td><td>Auto-increment event ID</td></tr>
+          <tr><td><code>session_id</code></td><td>TEXT</td><td>Nullable (<code>NULL</code> if <code>UNTRACKED</code>)</td></tr>
+          <tr><td><code>attempt_number</code></td><td>INTEGER</td><td>Attempt index (<code>1, 2, ...</code>)</td></tr>
+          <tr><td><code>commit_sha</code></td><td>TEXT</td><td>Short SHA (<code>abc1234</code>)</td></tr>
+          <tr><td><code>status</code></td><td>TEXT</td><td><code>REJECTED | VERIFIED | UNTRACKED</code></td></tr>
+          <tr><td><code>rules_json</code></td><td>TEXT</td><td>Per-rule pass/fail + diff + 5-line test output</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <h2>4. Annotated File Tree</h2>
+      <pre>devpost_awesome_app/
+├── commitgate/                 # Compiled JS entrypoints
+│   ├── cli.js                  # `commitgate` CLI
+│   └── hook.js                 # `.git/hooks/post-commit` target
+├── src/
+│   ├── cli.ts                  # init, start, status, cancel, serve
+│   ├── hook.ts                 # Post-commit hook entry
+│   ├── verifier.ts             # 4-rule deterministic engine
+│   ├── db.ts                   # SQLite store (WAL + fallback)
+│   ├── server.ts               # HTTP + SSE server (:4321)
+│   ├── public/
+│   │   └── index.html          # 360px monospace HUD widget
+│   └── auth/                   # Demo target for 1-min video
+│       ├── validate.ts
+│       └── validate.test.ts
+├── notes.txt                   # Scratch file for fake commit step
+├── devpost/                    # scope, prd, spec, checklist
+├── package.json
+└── tsconfig.json</pre>
+    </div>
+  </div>
+
+  <script>
+    const comps = [
+      {
+        title: "1. SQLite State Store (src/db.ts)",
+        prd: "Implements prd.md > States and Boundaries & 1. Session Lifecycle & Guardrails",
+        body: `• Opens ./commitgate.db in WAL mode (PRAGMA journal_mode = WAL;) so the SSE server and CLI/Git hook never lock each other.\n• Uses better-sqlite3 as primary synchronous driver, with automatic runtime fallback to Node 24's built-in synchronous node:sqlite (DatabaseSync) if native Windows C++ build tools aren't installed.\n• Exposes getActiveSession(), createSession(), supersedeActiveSession(), cancelSession(), recordCommitAttempt(), and getStateDigest() (using PRAGMA data_version).`
+      },
+      {
+        title: "2. CLI Controller (src/cli.ts -> commitgate/cli.js)",
+        prd: "Implements prd.md > Screens and Layout & 1. Session Lifecycle & Guardrails",
+        body: `• commitgate init: Installs .git/hooks/post-commit -> node ./commitgate/hook.js and initializes commitgate.db.\n• commitgate start --task ... --require ... --test ... --token CG-001 [--replace]: Refuses to overwrite an active PENDING session unless --replace is passed.\n• commitgate cancel <token>: Marks active session CANCELED.\n• commitgate status: Prints formatted current session + latest attempt.\n• commitgate serve: Starts the local HTTP + SSE HUD server on http://localhost:4321.`
+      },
+      {
+        title: "3. Git post-commit Hook & Deterministic Verifier (src/hook.ts & src/verifier.ts)",
+        prd: "Implements prd.md > 2. Automatic Git post-commit Hook & Deterministic Rule Engine",
+        body: `• Runs automatically after every git commit via node ./commitgate/hook.js.\n• If no session is PENDING, logs UNTRACKED in SQLite and prints "CommitGate: no active session. Commit ignored."\n• Evaluates the 4 deterministic rules in order:\n  1. Token match in commit message (CG-001)\n  2. Changed file path matches normalized --require glob (src/auth/**)\n  3. Non-whitespace lines changed > 0 in matched files\n  4. Test command (npm test) exits with code 0 (captures last 5 output lines on failure)`
+      },
+      {
+        title: "4. Local HTTP + SSE Server & Monospace HUD (src/server.ts & src/public/index.html)",
+        prd: "Implements prd.md > 3. Local HTML 'Trusted Proxy' HUD Widget & Look and Feel",
+        body: `• Serves the 360px monospace HUD card (#0A0C10 canvas, #11151D card, #232A36 border, JetBrains Mono).\n• Streams real-time updates over GET /events (Server-Sent Events) whenever SQLite's PRAGMA data_version / state digest changes (checked every 250ms)—decoupling hook.js from network calls.`
+      },
+      {
+        title: "5. Demo Target & Test Suite (src/auth/validate.ts, src/auth/validate.test.ts, notes.txt)",
+        prd: "Implements prd.md > The Core Journey",
+        body: `• Self-contained login validation module and test script used for the 1-minute demo recording:\n  - 0:10–0:25: Editing notes.txt fails required path, meaningful code change, and npm test.\n  - 0:25–1:00: Fixing src/auth/validate.ts passes npm test and flips CommitGate to VERIFIED.`
+      }
+    ];
+    function showComp(idx, btn) {
+      const c = comps[idx];
+      document.getElementById('comp-detail').innerHTML =
+        `<div style="color:var(--accent);font-weight:700;margin-bottom:0.25rem;">${c.title}</div>` +
+        `<div style="color:var(--pending);font-size:0.75rem;margin-bottom:0.6rem;">${c.prd}</div>` +
+        `<pre style="border:none;padding:0;">${c.body}</pre>`;
+      document.querySelectorAll('.comp-btn').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+    }
+    showComp(0, document.querySelector('.comp-btn'));
+  </script>
+</body>
+</html>

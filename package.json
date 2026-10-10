@@ -1,0 +1,23 @@
+{
+  "name": "commitgate",
+  "version": "0.1.0",
+  "description": "Deterministic Git-hook proof-of-work verifier and compact monospace HUD companion backed by SQLite.",
+  "main": "./commitgate/cli.js",
+  "bin": {
+    "commitgate": "./commitgate/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "node --no-warnings ./src/auth/validate.test.ts",
+    "commitgate": "node --no-warnings ./commitgate/cli.js",
+    "hud": "node --no-warnings ./commitgate/cli.js serve"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.8.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.13.4",
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,0 +1,13 @@
+# Personal learning context
+/devpost/learner-profile.md
+
+# Local credentials and environment files
+.env
+.env.*
+!.env.example
+
+# Dependencies and local SQLite runtime files
+node_modules/
+commitgate.db
+commitgate.db-wal
+commitgate.db-shm

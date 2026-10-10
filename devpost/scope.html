@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scope — Proof-of-Work Verifier</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --orange: #d29922;
+      --red: #f85149;
+      --green: #3fb950;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.6;
+      padding: 2.5rem 1.5rem;
+      max-width: 1020px;
+      margin: 0 auto;
+    }
+    header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 1.5rem;
+      margin-bottom: 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      padding: 0.25rem 0.65rem;
+      border-radius: 999px;
+      background: rgba(63, 185, 80, 0.15);
+      color: var(--green);
+      border: 1px solid rgba(63, 185, 80, 0.4);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    h1 { font-size: 1.85rem; margin-bottom: 0.4rem; }
+    .subtitle { color: var(--muted); font-size: 1.02rem; max-width: 760px; }
+    h2 {
+      font-size: 1.15rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+      margin-bottom: 0.85rem;
+      font-family: var(--mono);
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.25rem;
+      margin-bottom: 2rem;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem 1.4rem;
+    }
+    .card p { color: var(--text); font-size: 0.95rem; }
+    .card .muted { color: var(--muted); font-size: 0.88rem; margin-top: 0.5rem; }
+    .diagram-box {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      overflow-x: auto;
+    }
+    svg.flow {
+      width: 100%;
+      min-width: 720px;
+      height: auto;
+      display: block;
+    }
+    /* Interactive 1-Minute Demo Stepper */
+    .stepper {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .step-buttons {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.6rem;
+      margin-bottom: 1.25rem;
+    }
+    .step-btn {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 0.65rem 0.75rem;
+      border-radius: 8px;
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.15s ease;
+    }
+    .step-btn.active {
+      border-color: var(--accent);
+      color: var(--text);
+      background: rgba(88, 166, 255, 0.1);
+    }
+    .demo-sim {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 1rem;
+    }
+    @media (max-width: 720px) {
+      .demo-sim, .step-buttons { grid-template-columns: 1fr; }
+    }
+    .pane {
+      background: #090d13;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      font-family: var(--mono);
+      font-size: 0.84rem;
+    }
+    .pane-title {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.45rem;
+      margin-bottom: 0.75rem;
+      display: flex;
+      justify-content: space-between;
+    }
+    .state-pill {
+      padding: 0.15rem 0.55rem;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 0.75rem;
+    }
+    .state-PENDING { background: rgba(210, 153, 34, 0.2); color: var(--orange); border: 1px solid var(--orange); }
+    .state-REJECTED { background: rgba(248, 81, 73, 0.2); color: var(--red); border: 1px solid var(--red); }
+    .state-VERIFIED { background: rgba(63, 185, 80, 0.2); color: var(--green); border: 1px solid var(--green); }
+    pre { white-space: pre-wrap; word-break: break-word; color: #c9d1d9; }
+
+    /* Now / Later / Cut Tabs */
+    .scope-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+    .tab-btn {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .tab-btn.active {
+      color: var(--text);
+      border-color: var(--accent);
+      background: rgba(88, 166, 255, 0.12);
+    }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    ul.clean { list-style: none; }
+    ul.clean li {
+      padding: 0.55rem 0;
+      border-bottom: 1px solid rgba(48, 54, 61, 0.6);
+      font-size: 0.94rem;
+    }
+    ul.clean li:last-child { border-bottom: none; }
+    .tag {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      padding: 0.1rem 0.45rem;
+      border-radius: 4px;
+      margin-right: 0.5rem;
+    }
+    .tag-now { background: rgba(63, 185, 80, 0.15); color: var(--green); }
+    .tag-later { background: rgba(210, 153, 34, 0.15); color: var(--orange); }
+    .tag-cut { background: rgba(248, 81, 73, 0.15); color: var(--red); }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Proof-of-Work Verifier</h1>
+      <p class="subtitle">Local CLI, Git <code>post-commit</code> verification engine, and minimalist HTML "Trusted Proxy" status widget backed by SQLite.</p>
+    </div>
+    <span class="badge">doc: scope &bull; status: approved</span>
+  </header>
+
+  <div class="grid-2">
+    <div class="card">
+      <h2>The Unique Kernel</h2>
+      <p>Deterministic, zero-trust Git commit verification triggered automatically by a local <code>post-commit</code> hook, persisted in SQLite, and surfaced live in a minimalist local HTML status widget.</p>
+      <p class="muted">Pass/fail decisions are 100% rule-based (commit existence, session ID match, hook SHA record, expected files touched, non-noise diff, and passing test exit code)—never willpower or LLM vibes.</p>
+    </div>
+    <div class="card">
+      <h2>Who It's For &amp; Why It Matters</h2>
+      <p>Built for a developer spending up to 15 hours/day at a laptop who wants invisible, non-negotiable accountability tied to verifiable code output.</p>
+      <p class="muted">Inspirations: Local Git hooks, VS Code API, Cold Turkey (strict enforcement), and Obsidian (local-first state).</p>
+    </div>
+  </div>
+
+  <div class="diagram-box">
+    <h2>Architecture &amp; Core Loop Diagram</h2>
+    <svg class="flow" viewBox="0 0 880 190" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 1 L 10 5 L 0 9 z" fill="#58a6ff" />
+        </marker>
+      </defs>
+      <!-- Nodes -->
+      <rect x="10" y="45" width="150" height="90" rx="8" fill="#0d1117" stroke="#58a6ff" stroke-width="1.5"/>
+      <text x="85" y="78" fill="#e6edf3" font-family="monospace" font-size="12" text-anchor="middle" font-weight="bold">1. CLI Session Start</text>
+      <text x="85" y="98" fill="#8b949e" font-family="sans-serif" font-size="11" text-anchor="middle">Task + Rules saved</text>
+      <text x="85" y="115" fill="#d29922" font-family="monospace" font-size="11" text-anchor="middle">State: PENDING</text>
+
+      <rect x="195" y="45" width="150" height="90" rx="8" fill="#0d1117" stroke="#30363d" stroke-width="1.5"/>
+      <text x="270" y="78" fill="#e6edf3" font-family="monospace" font-size="12" text-anchor="middle" font-weight="bold">2. Git Commit</text>
+      <text x="270" y="98" fill="#8b949e" font-family="sans-serif" font-size="11" text-anchor="middle">post-commit hook</text>
+      <text x="270" y="115" fill="#8b949e" font-family="monospace" font-size="11" text-anchor="middle">Captures SHA</text>
+
+      <rect x="380" y="45" width="165" height="90" rx="8" fill="#0d1117" stroke="#58a6ff" stroke-width="1.5"/>
+      <text x="462" y="78" fill="#e6edf3" font-family="monospace" font-size="12" text-anchor="middle" font-weight="bold">3. SQLite Store</text>
+      <text x="462" y="98" fill="#8b949e" font-family="sans-serif" font-size="11" text-anchor="middle">Single Source of Truth</text>
+      <text x="462" y="115" fill="#58a6ff" font-family="monospace" font-size="11" text-anchor="middle">Sessions + Events</text>
+
+      <rect x="580" y="45" width="145" height="90" rx="8" fill="#0d1117" stroke="#30363d" stroke-width="1.5"/>
+      <text x="652" y="78" fill="#e6edf3" font-family="monospace" font-size="12" text-anchor="middle" font-weight="bold">4. Rule Verifier</text>
+      <text x="652" y="98" fill="#8b949e" font-family="sans-serif" font-size="11" text-anchor="middle">Paths, Diff, Tests</text>
+      <text x="652" y="115" fill="#8b949e" font-family="monospace" font-size="11" text-anchor="middle">Deterministic</text>
+
+      <rect x="755" y="45" width="115" height="90" rx="8" fill="#0d1117" stroke="#3fb950" stroke-width="1.5"/>
+      <text x="812" y="75" fill="#e6edf3" font-family="monospace" font-size="12" text-anchor="middle" font-weight="bold">5. Widget</text>
+      <text x="812" y="96" fill="#f85149" font-family="monospace" font-size="10" text-anchor="middle">REJECTED (Red)</text>
+      <text x="812" y="114" fill="#3fb950" font-family="monospace" font-size="10" text-anchor="middle">VERIFIED (Green)</text>
+
+      <!-- Arrows -->
+      <line x1="160" y1="90" x2="190" y2="90" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <line x1="345" y1="90" x2="375" y2="90" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <line x1="545" y1="90" x2="575" y2="90" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <line x1="725" y1="90" x2="750" y2="90" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arrow)"/>
+    </svg>
+  </div>
+
+  <div class="stepper">
+    <h2>Interactive 1-Minute Demo Walkthrough (What "Working" Looks Like)</h2>
+    <div class="step-buttons">
+      <button class="step-btn active" onclick="setStep(0)">0:00–0:10 &bull; Start Session</button>
+      <button class="step-btn" onclick="setStep(1)">0:10–0:25 &bull; Fake Commit</button>
+      <button class="step-btn" onclick="setStep(2)">0:25–0:45 &bull; Real Work</button>
+      <button class="step-btn" onclick="setStep(3)">0:45–1:00 &bull; Verified!</button>
+    </div>
+    <div class="demo-sim">
+      <div class="pane">
+        <div class="pane-title">
+          <span>Developer Terminal (Repo + Git Hook)</span>
+          <span id="sim-time">0:00–0:10</span>
+        </div>
+        <pre id="sim-terminal">$ pow start --task "Implement token validator" --target "src/auth.ts" --test "npm test"
+
+Session created in SQLite:
+  ID:       sess_01
+  Status:   PENDING
+  Target:   src/auth.ts
+  Test Cmd: npm test</pre>
+      </div>
+      <div class="pane">
+        <div class="pane-title">
+          <span>Local HTML "Trusted Proxy" Widget</span>
+          <span id="sim-badge" class="state-pill state-PENDING">PENDING</span>
+        </div>
+        <pre id="sim-widget">SESSION: sess_01
+TASK:    Implement token validator
+
+RULES CHECKLIST:
+[ ] Commit references [sess_01]
+[ ] Recorded by post-commit hook
+[ ] Touches src/auth.ts (non-noise diff)
+[ ] Test command exits 0 (npm test)</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Scope Boundary Explorer (Now / Later / Cut)</h2>
+    <div class="scope-tabs">
+      <button class="tab-btn active" onclick="setTab('now', this)">Now (In PoC)</button>
+      <button class="tab-btn" onclick="setTab('later', this)">Later</button>
+      <button class="tab-btn" onclick="setTab('cut', this)">Explicitly Cut</button>
+    </div>
+    <div id="tab-now" class="tab-panel active">
+      <ul class="clean">
+        <li><span class="tag tag-now">NOW</span>CLI commands to initialize the Git hook, start a session with rules, and inspect status.</li>
+        <li><span class="tag tag-now">NOW</span>SQLite database persisting session ID, rules, hook commit events, and verification results.</li>
+        <li><span class="tag tag-now">NOW</span>Automatic Git <code>post-commit</code> hook capturing commit SHA and triggering deterministic verification.</li>
+        <li><span class="tag tag-now">NOW</span>Deterministic rule engine (commit exists, session ID in message, hook SHA match, target file touched, non-noise diff, test command exit 0).</li>
+        <li><span class="tag tag-now">NOW</span>Minimalist local HTML "Trusted Proxy" status widget showing live <code>PENDING</code> &rarr; <code>REJECTED</code> &rarr; <code>VERIFIED</code> transitions.</li>
+      </ul>
+    </div>
+    <div id="tab-later" class="tab-panel">
+      <ul class="clean">
+        <li><span class="tag tag-later">LATER</span>LLM coaching or feedback layered strictly <em>after</em> deterministic pass/fail verification.</li>
+        <li><span class="tag tag-later">LATER</span>Browser extension for tab unlocking or YouTube active-recall ("pause &amp; prove what you learned").</li>
+        <li><span class="tag tag-later">LATER</span>Email / job-application "Trusted Proxy" inbox monitor.</li>
+        <li><span class="tag tag-later">LATER</span>Long-running multi-agent orchestration, VS Code API integration, and non-Git file watchers.</li>
+      </ul>
+    </div>
+    <div id="tab-cut" class="tab-panel">
+      <ul class="clean">
+        <li><span class="tag tag-cut">CUT</span><strong>Vibes-based LLM pass/fail judgment:</strong> LLMs can hallucinate or be prompt-injected; proof-of-work verification must be 100% deterministic.</li>
+        <li><span class="tag tag-cut">CUT</span><strong>Cloud sync, user accounts, and bloated web dashboards:</strong> Kept 100% local-first and distraction-free for a 2–4 hour build.</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    const steps = [
+      {
+        time: "0:00–0:10",
+        state: "PENDING",
+        terminal: `$ pow start --task "Implement token validator" --target "src/auth.ts" --test "npm test"\n\nSession created in SQLite:\n  ID:       sess_01\n  Status:   PENDING\n  Target:   src/auth.ts\n  Test Cmd: npm test`,
+        widget: `SESSION: sess_01\nTASK:    Implement token validator\n\nRULES CHECKLIST:\n[ ] Commit references [sess_01]\n[ ] Recorded by post-commit hook\n[ ] Touches src/auth.ts (non-noise diff)\n[ ] Test command exits 0 (npm test)`
+      },
+      {
+        time: "0:10–0:25",
+        state: "REJECTED",
+        terminal: `$ echo "// todo" >> src/auth.ts\n$ git commit -am "quick update [sess_01]"\n\n[pow post-commit hook fired -> commit a1b2c3d]\n✗ Verification REJECTED:\n  ✓ Commit references [sess_01]\n  ✓ Hook recorded SHA a1b2c3d\n  ✗ Diff is comment/whitespace noise only (no substantive code lines)`,
+        widget: `SESSION: sess_01\nLAST COMMIT: a1b2c3d (Rejected)\n\nRULES CHECKLIST:\n[✓] Commit references [sess_01]\n[✓] Recorded by post-commit hook\n[✗] Touches src/auth.ts (FAILED: comment/noise only)\n[—] Test command skipped on noise diff`
+      },
+      {
+        time: "0:25–0:45",
+        state: "REJECTED",
+        terminal: `# Developer edits src/auth.ts with real validation logic\n$ npm test\n\nPASS src/auth.test.ts\n  ✓ validates active tokens (4ms)\n\n$ git commit -am "Implement token validator [sess_01]"`,
+        widget: `SESSION: sess_01\nSTATUS: Verifying new commit...\n\nRunning deterministic rule checks against SQLite session rules...`
+      },
+      {
+        time: "0:45–1:00",
+        state: "VERIFIED",
+        terminal: `[pow post-commit hook fired -> commit f9e8d7c]\n✓ Verification PASSED:\n  ✓ Commit references [sess_01]\n  ✓ Hook recorded SHA f9e8d7c\n  ✓ Substantive code diff in src/auth.ts (+14 lines)\n  ✓ Test command exited 0\n\nSession sess_01 marked VERIFIED in SQLite.`,
+        widget: `SESSION: sess_01\nLAST COMMIT: f9e8d7c (Verified)\n\nRULES CHECKLIST:\n[✓] Commit references [sess_01]\n[✓] Recorded by post-commit hook\n[✓] Touches src/auth.ts (+14 substantive lines)\n[✓] Test command exits 0 (npm test)\n\nPROOF-OF-WORK COMPLETE.`
+      }
+    ];
+
+    function setStep(idx) {
+      const s = steps[idx];
+      document.getElementById('sim-time').textContent = s.time;
+      document.getElementById('sim-terminal').textContent = s.terminal;
+      document.getElementById('sim-widget').textContent = s.widget;
+      const badge = document.getElementById('sim-badge');
+      badge.textContent = s.state;
+      badge.className = 'state-pill state-' + s.state;
+      document.querySelectorAll('.step-btn').forEach((btn, i) => {
+        btn.classList.toggle('active', i === idx);
+      });
+    }
+
+    function setTab(id, el) {
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('tab-' + id).classList.add('active');
+      el.classList.add('active');
+    }
+  </script>
+</body>
+</html>
