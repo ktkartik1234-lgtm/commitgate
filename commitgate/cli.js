@@ -1,5 +1,38 @@
 #!/usr/bin/env node
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -152,6 +185,54 @@ export function validateLogin(email: string, password: string): boolean {
     console.log("  - src/auth/validate.ts reset to initial failing test state");
     console.log("  - notes.txt reset");
 }
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+async function cmdDemo(repoRoot) {
+    const { execSync } = await Promise.resolve().then(() => __importStar(require("node:child_process")));
+    console.log("=== [0:00] Step 1: Resetting to Standby (IDLE) ===");
+    cmdDemoReset(repoRoot);
+    await sleep(2500);
+    console.log("\n=== [0:10] Step 2: Starting Focus Session CG-001 (PENDING) ===");
+    cmdStart([
+        "--task",
+        "Fix login validation",
+        "--require",
+        "src/auth/**",
+        "--test",
+        "npm test",
+        "--token",
+        "CG-001",
+    ], repoRoot);
+    await sleep(3500);
+    console.log("\n=== [0:20] Step 3: Attempting Fake/Noise Commit on notes.txt (REJECTED) ===");
+    node_fs_1.default.appendFileSync(node_path_1.default.join(repoRoot, "notes.txt"), "noise\n", "utf8");
+    execSync('git add notes.txt && git commit -m "CG-001 done"', {
+        cwd: repoRoot,
+        stdio: "inherit",
+    });
+    await sleep(4500);
+    console.log("\n=== [0:35] Step 4: Fixing src/auth/validate.ts & Committing (VERIFIED) ===");
+    const validatePath = node_path_1.default.join(repoRoot, "src", "auth", "validate.ts");
+    const fixedValidate = `/**
+ * Demo target module for CommitGate proof-of-work verification.
+ * Task: Fix login validation so valid credentials return true.
+ */
+export function validateLogin(email: string, password: string): boolean {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail.includes("@") || password.length < 8) {
+    return false;
+  }
+  // Valid credentials pass verification:
+  return true;
+}
+`;
+    node_fs_1.default.writeFileSync(validatePath, fixedValidate, "utf8");
+    execSync('git add src/auth/validate.ts && git commit -m "CG-001 Fix login validation"', {
+        cwd: repoRoot,
+        stdio: "inherit",
+    });
+}
 async function main() {
     const repoRoot = process.cwd();
     const [, , subcommand, ...rest] = process.argv;
@@ -171,6 +252,9 @@ async function main() {
         case "demo-reset":
             cmdDemoReset(repoRoot);
             break;
+        case "demo":
+            await cmdDemo(repoRoot);
+            break;
         case "serve": {
             const flags = parseFlags(rest);
             const port = typeof flags.port === "string" ? parseInt(flags.port, 10) : 4321;
@@ -181,7 +265,7 @@ async function main() {
             (0, hook_1.runPostCommitHook)(repoRoot);
             break;
         default:
-            console.log("Usage: commitgate <init|start|status|cancel|demo-reset|serve> [options]");
+            console.log("Usage: commitgate <init|start|status|cancel|demo-reset|demo|serve> [options]");
             break;
     }
 }

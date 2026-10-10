@@ -184,6 +184,70 @@ export function validateLogin(email: string, password: string): boolean {
   console.log("  - notes.txt reset");
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function cmdDemo(repoRoot: string): Promise<void> {
+  const { execSync } = await import("node:child_process");
+
+  console.log("=== [0:00] Step 1: Resetting to Standby (IDLE) ===");
+  cmdDemoReset(repoRoot);
+  await sleep(2500);
+
+  console.log("\n=== [0:10] Step 2: Starting Focus Session CG-001 (PENDING) ===");
+  cmdStart(
+    [
+      "--task",
+      "Fix login validation",
+      "--require",
+      "src/auth/**",
+      "--test",
+      "npm test",
+      "--token",
+      "CG-001",
+    ],
+    repoRoot
+  );
+  await sleep(3500);
+
+  console.log(
+    "\n=== [0:20] Step 3: Attempting Fake/Noise Commit on notes.txt (REJECTED) ==="
+  );
+  fs.appendFileSync(path.join(repoRoot, "notes.txt"), "noise\n", "utf8");
+  execSync('git add notes.txt && git commit -m "CG-001 done"', {
+    cwd: repoRoot,
+    stdio: "inherit",
+  });
+  await sleep(4500);
+
+  console.log(
+    "\n=== [0:35] Step 4: Fixing src/auth/validate.ts & Committing (VERIFIED) ==="
+  );
+  const validatePath = path.join(repoRoot, "src", "auth", "validate.ts");
+  const fixedValidate = `/**
+ * Demo target module for CommitGate proof-of-work verification.
+ * Task: Fix login validation so valid credentials return true.
+ */
+export function validateLogin(email: string, password: string): boolean {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail.includes("@") || password.length < 8) {
+    return false;
+  }
+  // Valid credentials pass verification:
+  return true;
+}
+`;
+  fs.writeFileSync(validatePath, fixedValidate, "utf8");
+  execSync(
+    'git add src/auth/validate.ts && git commit -m "CG-001 Fix login validation"',
+    {
+      cwd: repoRoot,
+      stdio: "inherit",
+    }
+  );
+}
+
 async function main(): Promise<void> {
   const repoRoot = process.cwd();
   const [, , subcommand, ...rest] = process.argv;
@@ -204,6 +268,9 @@ async function main(): Promise<void> {
     case "demo-reset":
       cmdDemoReset(repoRoot);
       break;
+    case "demo":
+      await cmdDemo(repoRoot);
+      break;
     case "serve": {
       const flags = parseFlags(rest);
       const port =
@@ -216,7 +283,7 @@ async function main(): Promise<void> {
       break;
     default:
       console.log(
-        "Usage: commitgate <init|start|status|cancel|demo-reset|serve> [options]"
+        "Usage: commitgate <init|start|status|cancel|demo-reset|demo|serve> [options]"
       );
       break;
   }
